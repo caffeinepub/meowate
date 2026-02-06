@@ -1,0 +1,44 @@
+{
+  "kind": "implementation_plan",
+  "version": "1.0",
+  "title": "Fix Matching UI indefinite connecting and add WebRTC diagnostics panel",
+  "requirements": [
+    {
+      "id": "REQ-4",
+      "summary": "Make the WebRTC connection flow reliably time out with a visible error and allow clean retry without reusing stale peer/signaling state.",
+      "acceptanceCriteria": [
+        "If a connection attempt makes no progress for the configured timeout window, the UI shows a visible error state (Connection Error alert) and provides a retry action.",
+        "The UI does not remain stuck in “connecting” after a timeout; it returns to a consistent recoverable state (idle/searching).",
+        "Retrying after a timeout attempts a new match and does not reuse the previous peer/signaling state."
+      ],
+      "file_operations": [
+        {
+          "path": "frontend/src/hooks/useWebRTC.ts",
+          "operation": "modify",
+          "description": "Harden the WebRTC timeout/retry logic so it cannot get stuck due to stale React closures: track current connection state/progress via refs, start/clear the signaling timeout deterministically, and ensure timeout transitions the hook to an error state (with an English error message) and performs a full cleanup. Ensure disconnect/cleanup clears RTCPeerConnection handlers, candidate queues/dedupe sets, timers, and local/remote stream refs; and invoke existing signaling cleanup (useCleanupSignalingState) for the current peer so subsequent retries start with fresh signaling state."
+        },
+        {
+          "path": "frontend/src/pages/MatchingPage.tsx",
+          "operation": "modify",
+          "description": "Ensure MatchingPage reacts consistently when useWebRTC enters an error/timeout path: immediately reset the page-level connectionState/matchedPeer to a recoverable state (idle) while preserving the Connection Error alert with a Retry action. Ensure the retry action always forces a clean disconnect first, then starts a brand-new match attempt (no reuse of previous peer/signaling state). Keep all user-facing text in English."
+        }
+      ]
+    },
+    {
+      "id": "REQ-5",
+      "summary": "Add clear matching/connecting status messaging and a toggleable diagnostics panel exposing current WebRTC diagnostic fields.",
+      "acceptanceCriteria": [
+        "During searching/connecting, the UI displays a human-readable status that updates as WebRTC states change.",
+        "A diagnostics panel can be toggled on the Matching page and shows the current values from connection.diagnostics.",
+        "All user-facing text is in English."
+      ],
+      "file_operations": [
+        {
+          "path": "frontend/src/pages/MatchingPage.tsx",
+          "operation": "modify",
+          "description": "Add a concise, human-readable status line for the current phase (searching/connecting/connected/error) and update it based on useWebRTC state changes (signalingState, iceConnectionState, connectionState). Implement a Collapsible diagnostics panel (using the existing Collapsible/CollapsibleTrigger/CollapsibleContent imports) that can be toggled and displays: signalingState, iceConnectionState, iceGatheringState, connectionState, retryAttempts, usingTurnServer (from connection.diagnostics). Ensure all labels/help text are in English and the diagnostics panel is wired into the rendered Matching page (not orphaned)."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,152 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Catish Gen-Z Pastel Theme - Light Mode */
+    --background: oklch(98% 0.01 280);
+    --foreground: oklch(25% 0.02 280);
+    --card: oklch(100% 0 0);
+    --card-foreground: oklch(25% 0.02 280);
+    --popover: oklch(100% 0 0);
+    --popover-foreground: oklch(25% 0.02 280);
+    --primary: oklch(65% 0.25 330);
+    --primary-foreground: oklch(100% 0 0);
+    --secondary: oklch(75% 0.15 280);
+    --secondary-foreground: oklch(25% 0.02 280);
+    --muted: oklch(95% 0.02 280);
+    --muted-foreground: oklch(50% 0.02 280);
+    --accent: oklch(92% 0.05 320);
+    --accent-foreground: oklch(25% 0.02 280);
+    --destructive: oklch(60% 0.22 25);
+    --destructive-foreground: oklch(100% 0 0);
+    --border: oklch(90% 0.02 280);
+    --input: oklch(90% 0.02 280);
+    --ring: oklch(65% 0.25 330);
+    --radius: 1rem;
+    --success: oklch(70% 0.18 145);
+    --warning: oklch(75% 0.18 85);
+  }
+
+  .dark {
+    /* Catish Gen-Z Pastel Theme - Dark Mode */
+    --background: oklch(18% 0.02 280);
+    --foreground: oklch(95% 0.01 280);
+    --card: oklch(20% 0.02 280);
+    --card-foreground: oklch(95% 0.01 280);
+    --popover: oklch(20% 0.02 280);
+    --popover-foreground: oklch(95% 0.01 280);
+    --primary: oklch(70% 0.22 330);
+    --primary-foreground: oklch(100% 0 0);
+    --secondary: oklch(30% 0.08 280);
+    --secondary-foreground: oklch(95% 0.01 280);
+    --muted: oklch(25% 0.02 280);
+    --muted-foreground: oklch(65% 0.02 280);
+    --accent: oklch(28% 0.05 320);
+    --accent-foreground: oklch(95% 0.01 280);
+    --destructive: oklch(55% 0.22 25);
+    --destructive-foreground: oklch(100% 0 0);
+    --border: oklch(30% 0.02 280);
+    --input: oklch(30% 0.02 280);
+    --ring: oklch(70% 0.22 330);
+    --success: oklch(65% 0.18 145);
+    --warning: oklch(70% 0.18 85);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-sans;
+    font-family: 'Poppins', system-ui, -apple-system, sans-serif;
+  }
+}
+
+@layer utilities {
+  .glass-effect {
+    background-color: hsl(var(--background) / 0.8);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .animate-bounce-slow {
+    animation: bounce 3s infinite;
+  }
+
+  .animate-pulse-slow {
+    animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+}
+
+/* Cat-themed animations */
+@keyframes wiggle {
+  0%, 100% {
+    transform: rotate(-3deg);
+  }
+  50% {
+    transform: rotate(3deg);
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes paw-print {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.8;
+  }
+}
+
+.animate-wiggle {
+  animation: wiggle 2s ease-in-out infinite;
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-paw-print {
+  animation: paw-print 1.5s ease-in-out infinite;
+}
+
+/* Accessibility improvements */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Focus visible styles for keyboard navigation */
+*:focus-visible {
+  @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  :root {
+    --border: oklch(50% 0 0);
+  }
+  .dark {
+    --border: oklch(70% 0 0);
+  }
+}

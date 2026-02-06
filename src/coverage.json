@@ -1,0 +1,85 @@
+{
+  "kind": "coverage_report",
+  "version": "1.0",
+  "generatedAt": "2026-02-06T19:44:59.487Z",
+  "sources": {
+    "buildRequest": true,
+    "implementationPlan": true
+  },
+  "requirements": {
+    "total": 6,
+    "implemented": 2,
+    "items": [
+      {
+        "id": "REQ-1",
+        "summary": "Update the backend matchmaking API so that attempting to find a peer never traps just because no peers are available. Specifically, change matchmaking to return a safe “no peer available” result (e.g., null/optional) instead of Debug.trap when the active pool is empty, and ensure callers can distinguish between (a) not onboarded, (b) not active, and (c) no peers currently available.",
+        "status": "unknown",
+        "plannedFiles": [],
+        "matchedFiles": []
+      },
+      {
+        "id": "REQ-2",
+        "summary": "Implement database-like, persistent backend state for presence and matchmaking so the app can reliably support “random stranger” matching. Store and manage: (1) who is currently online/active, (2) who is currently waiting to be matched, and (3) current active pairings, with support for users leaving/next/end. Use Internet Computer canister stable state so this data is not lost on upgrade.",
+        "status": "unknown",
+        "plannedFiles": [],
+        "matchedFiles": []
+      },
+      {
+        "id": "REQ-3",
+        "summary": "Add backend-side signaling/session cleanup rules so that stale signaling records cannot cause the UI to remain in “connecting” with no feedback. Add expiration/cleanup logic based on SignalingData.lastUpdated, and ensure a caller can explicitly clean up signaling state with a peer when retrying or skipping.",
+        "status": "unknown",
+        "plannedFiles": [],
+        "matchedFiles": []
+      },
+      {
+        "id": "REQ-4",
+        "summary": "Fix the frontend WebRTC flow so the user never sees an indefinite “connecting” state with no message. Ensure the existing timeout logic in the WebRTC hook reliably triggers and surfaces an error when no answer/ICE progress occurs, and ensure MatchingPage reacts by returning to idle and offering a retry/next action.",
+        "status": "implemented",
+        "plannedFiles": [
+          "frontend/src/hooks/useWebRTC.ts",
+          "frontend/src/pages/MatchingPage.tsx"
+        ],
+        "matchedFiles": [
+          "frontend/src/hooks/useWebRTC.ts",
+          "frontend/src/pages/MatchingPage.tsx"
+        ]
+      },
+      {
+        "id": "REQ-5",
+        "summary": "Improve user-facing diagnostics on the Matching page during connection attempts: show a clear status message while searching/connecting, and provide a collapsible diagnostics panel that exposes key WebRTC diagnostic fields already tracked (signalingState, iceConnectionState, iceGatheringState, connectionState, retryAttempts, usingTurnServer).",
+        "status": "implemented",
+        "plannedFiles": [
+          "frontend/src/pages/MatchingPage.tsx"
+        ],
+        "matchedFiles": [
+          "frontend/src/pages/MatchingPage.tsx"
+        ]
+      },
+      {
+        "id": "REQ-6",
+        "summary": "If adding stable persistent state changes the backend actor state layout, implement a conditional Motoko migration in backend/migration.mo so existing deployed state can be upgraded without data loss or traps.",
+        "status": "unknown",
+        "plannedFiles": [],
+        "matchedFiles": []
+      }
+    ]
+  },
+  "changedFiles": [
+    "backend/main.mo",
+    "build-request.json",
+    "feature_evidence.json",
+    "frontend-file-summaries.txt",
+    "frontend-implementation-plan.json",
+    "frontend/src/backend.d.ts",
+    "frontend/src/backend.ts",
+    "frontend/src/declarations/backend.did.d.ts",
+    "frontend/src/declarations/backend.did.js",
+    "frontend/src/hooks/useQueries.ts",
+    "frontend/src/hooks/useWebRTC.ts",
+    "frontend/src/pages/MatchingPage.tsx",
+    "project_state.json",
+    "scratch/component-selection.json",
+    "spec.md",
+    "spec_vs_diff_report.json"
+  ]
+}

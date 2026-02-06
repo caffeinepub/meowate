@@ -1,2 +1,3 @@
-# meowate
-Exported from Caffeine project: Fix WebRTC matchmaking stuck on “connecting” and add persistent presence/matchmaking state
+## 
+
+To run app build and run docker image: `docker build -t app . docker run -it --network host app`
