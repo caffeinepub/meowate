@@ -8,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Heart, X, Mic, MicOff, Phone, UserPlus, AlertCircle, Signal, SignalHigh, SignalLow, Info, RefreshCw, Volume2, Play, LogIn, ChevronDown } from 'lucide-react';
+import { Heart, X, Mic, MicOff, Phone, UserPlus, AlertCircle, Signal, SignalHigh, SignalLow, Info, RefreshCw, Volume2, Play, LogIn, ChevronDown, Radio } from 'lucide-react';
 import { toast } from 'sonner';
 import { Principal } from '@dfinity/principal';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -318,11 +318,11 @@ export default function MatchingPage() {
       if (signalingState === 'have-local-offer' || signalingState === 'have-remote-offer') {
         return 'Exchanging connection details...';
       } else if (iceConnectionState === 'checking') {
-        return 'Establishing peer connection...';
+        return 'Establishing peer connection via relay...';
       } else if (iceConnectionState === 'connected' || iceConnectionState === 'completed') {
         return 'Connection established!';
       } else if (rtcState === 'connecting') {
-        return 'Connecting to peer...';
+        return 'Connecting to peer via relay server...';
       } else {
         return 'Initializing connection...';
       }
@@ -406,6 +406,12 @@ export default function MatchingPage() {
             <AlertTitle className="text-primary font-semibold">Status</AlertTitle>
             <AlertDescription>
               <p className="text-foreground">{getStatusMessage()}</p>
+              {connection.diagnostics.usingTurnServer && (connectionState === 'connecting' || connectionState === 'connected') && (
+                <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
+                  <Radio className="h-4 w-4 text-success" />
+                  <span>Using relay server for secure connection</span>
+                </div>
+              )}
             </AlertDescription>
           </Alert>
         )}
@@ -481,9 +487,8 @@ export default function MatchingPage() {
                 <p className="font-semibold">Troubleshooting steps:</p>
                 <ul className="list-disc list-inside space-y-1 ml-2">
                   <li>Check your internet connection</li>
-                  <li>Disable VPN or proxy if active</li>
-                  <li>Try a different network (mobile data/WiFi)</li>
-                  <li>Ensure firewall allows WebRTC connections</li>
+                  <li>Ensure your firewall allows WebRTC connections</li>
+                  <li>Try disabling VPN or proxy if active</li>
                   <li>Refresh the page and try again</li>
                 </ul>
               </div>
@@ -500,69 +505,16 @@ export default function MatchingPage() {
           </Alert>
         )}
 
-        {/* Diagnostics Panel */}
-        {(connectionState === 'connecting' || connectionState === 'connected' || connection.state === 'error') && (
-          <Collapsible open={showDiagnostics} onOpenChange={setShowDiagnostics}>
-            <Card className="border-muted">
-              <CardContent className="p-4">
-                <CollapsibleTrigger asChild>
-                  <Button variant="ghost" className="w-full justify-between p-2">
-                    <span className="text-sm font-medium">Connection Diagnostics</span>
-                    <ChevronDown className={`h-4 w-4 transition-transform ${showDiagnostics ? 'rotate-180' : ''}`} />
-                  </Button>
-                </CollapsibleTrigger>
-                <CollapsibleContent className="pt-4">
-                  <div className="space-y-2 text-sm">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <span className="font-semibold">Signaling State:</span>
-                        <p className="text-muted-foreground">{connection.diagnostics.signalingState}</p>
-                      </div>
-                      <div>
-                        <span className="font-semibold">ICE Connection:</span>
-                        <p className="text-muted-foreground">{connection.diagnostics.iceConnectionState}</p>
-                      </div>
-                      <div>
-                        <span className="font-semibold">ICE Gathering:</span>
-                        <p className="text-muted-foreground">{connection.diagnostics.iceGatheringState}</p>
-                      </div>
-                      <div>
-                        <span className="font-semibold">Connection State:</span>
-                        <p className="text-muted-foreground">{connection.diagnostics.connectionState}</p>
-                      </div>
-                      <div>
-                        <span className="font-semibold">Retry Attempts:</span>
-                        <p className="text-muted-foreground">{connection.diagnostics.retryAttempts}</p>
-                      </div>
-                      <div>
-                        <span className="font-semibold">Using TURN:</span>
-                        <p className="text-muted-foreground">{connection.diagnostics.usingTurnServer ? 'Yes' : 'No'}</p>
-                      </div>
-                    </div>
-                    {connection.diagnostics.lastError && (
-                      <div className="pt-2 border-t">
-                        <span className="font-semibold">Last Error:</span>
-                        <p className="text-destructive text-xs">{connection.diagnostics.lastError}</p>
-                      </div>
-                    )}
-                  </div>
-                </CollapsibleContent>
-              </CardContent>
-            </Card>
-          </Collapsible>
-        )}
-
         {/* Main Matching Card */}
         <Card className="border-2 shadow-cat-lg">
           <CardContent className="p-8">
+            {/* Idle State */}
             {connectionState === 'idle' && (
               <div className="text-center space-y-6">
                 <div className="flex justify-center">
-                  <img
-                    src="/assets/generated/meowate-mascot-cat-transparent.dim_200x200.png"
-                    alt="Meowate Mascot"
-                    className="h-32 w-32 animate-float"
-                  />
+                  <div className="h-32 w-32 rounded-full bg-gradient-to-br from-pink-500 via-purple-500 to-cyan-500 flex items-center justify-center animate-float">
+                    <img src="/assets/generated/cat-paw-icon-transparent.dim_64x64.png" alt="Cat Paw" className="h-16 w-16" />
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <h2 className="text-2xl font-bold">Ready to Match?</h2>
@@ -574,9 +526,8 @@ export default function MatchingPage() {
                   size="lg"
                   onClick={handleStartMatching}
                   disabled={activeUserCount < 2}
-                  className="bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 hover:opacity-90 text-white px-8 py-6 text-lg"
+                  className="w-full max-w-xs bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 hover:opacity-90"
                 >
-                  <Phone className="mr-2 h-6 w-6" />
                   Start Matching
                 </Button>
                 {activeUserCount < 2 && (
@@ -587,158 +538,144 @@ export default function MatchingPage() {
               </div>
             )}
 
+            {/* Searching State */}
             {connectionState === 'searching' && (
               <div className="text-center space-y-6">
                 <div className="flex justify-center">
-                  <div className="h-24 w-24 border-4 border-primary/30 border-t-primary rounded-full animate-spin"></div>
+                  <div className="h-32 w-32 rounded-full bg-gradient-to-br from-pink-500 via-purple-500 to-cyan-500 flex items-center justify-center animate-spin">
+                    <img src="/assets/generated/cat-loading-spinner-transparent.dim_80x80.png" alt="Loading" className="h-20 w-20" />
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <h2 className="text-2xl font-bold">Searching...</h2>
                   <p className="text-muted-foreground">
-                    Looking for someone awesome to chat with!
+                    Looking for available users to match with
                   </p>
                 </div>
               </div>
             )}
 
+            {/* Connecting State */}
             {connectionState === 'connecting' && (
               <div className="text-center space-y-6">
                 <div className="flex justify-center">
-                  <div className="h-24 w-24 border-4 border-success/30 border-t-success rounded-full animate-spin"></div>
+                  <div className="h-32 w-32 rounded-full bg-gradient-to-br from-pink-500 via-purple-500 to-cyan-500 flex items-center justify-center animate-pulse">
+                    <Signal className="h-16 w-16 text-white" />
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <h2 className="text-2xl font-bold">Connecting...</h2>
                   <p className="text-muted-foreground">
-                    Establishing secure connection with your match!
+                    Establishing secure connection via relay server
                   </p>
                 </div>
+                <Progress value={50} className="w-full max-w-xs mx-auto" />
               </div>
             )}
 
+            {/* Deciding State */}
             {connectionState === 'deciding' && (
               <div className="text-center space-y-6">
                 <div className="flex justify-center">
-                  <img
-                    src="/assets/generated/cat-clock-timer-transparent.dim_64x64.png"
-                    alt="Timer"
-                    className="h-24 w-24 animate-pulse"
-                  />
+                  <div className="h-32 w-32 rounded-full bg-gradient-to-br from-pink-500 via-purple-500 to-cyan-500 flex items-center justify-center">
+                    <span className="text-4xl font-bold text-white">{decisionTimer}</span>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <h2 className="text-2xl font-bold">Match Found!</h2>
                   <p className="text-muted-foreground">
-                    Say hi or skip to find someone else
+                    Accept or skip this match
                   </p>
-                  <div className="text-4xl font-bold text-primary">{decisionTimer}s</div>
                 </div>
                 <div className="flex gap-4 justify-center">
                   <Button
                     size="lg"
                     variant="outline"
                     onClick={handleSkip}
-                    className="px-8"
+                    className="gap-2"
                   >
-                    <X className="mr-2 h-5 w-5" />
+                    <X className="h-5 w-5" />
                     Skip
                   </Button>
                   <Button
                     size="lg"
                     onClick={handleAccept}
-                    className="bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 hover:opacity-90 text-white px-8"
+                    className="gap-2 bg-success hover:bg-success/90"
                   >
-                    <Heart className="mr-2 h-5 w-5" />
+                    <Heart className="h-5 w-5" />
                     Accept
                   </Button>
                 </div>
               </div>
             )}
 
+            {/* Connected State */}
             {connectionState === 'connected' && (
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="h-16 w-16 rounded-full bg-gradient-to-br from-pink-500 via-purple-500 to-cyan-500 flex items-center justify-center">
-                      <span className="text-2xl">🐱</span>
-                    </div>
+                    {getConnectionQualityIcon()}
                     <div>
-                      <h3 className="text-xl font-bold">Connected</h3>
+                      <h3 className="font-semibold">Connected</h3>
                       <p className="text-sm text-muted-foreground">
-                        {formatTime(callDuration)}
+                        Call Duration: {formatTime(callDuration)}
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {getConnectionQualityIcon()}
-                  </div>
+                  {!isPremium && (
+                    <Badge variant="outline">
+                      {formatTime(maxCallDuration - callDuration)} left
+                    </Badge>
+                  )}
                 </div>
-
-                {!isPremium && (
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Free session time</span>
-                      <span>{formatTime(maxCallDuration - callDuration)} remaining</span>
-                    </div>
-                    <Progress value={(callDuration / maxCallDuration) * 100} />
-                  </div>
-                )}
 
                 <div className="flex gap-3 justify-center">
                   <Button
                     size="lg"
-                    variant={connection.isMuted ? 'default' : 'outline'}
+                    variant={connection.isMuted ? 'destructive' : 'outline'}
                     onClick={toggleMute}
-                    className="flex-1"
+                    className="gap-2"
                   >
-                    {connection.isMuted ? (
-                      <>
-                        <MicOff className="mr-2 h-5 w-5" />
-                        Unmute
-                      </>
-                    ) : (
-                      <>
-                        <Mic className="mr-2 h-5 w-5" />
-                        Mute
-                      </>
-                    )}
+                    {connection.isMuted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+                    {connection.isMuted ? 'Unmute' : 'Mute'}
                   </Button>
                   <Button
                     size="lg"
                     variant="destructive"
                     onClick={handleEndCall}
-                    className="flex-1"
+                    className="gap-2"
                   >
-                    <Phone className="mr-2 h-5 w-5" />
+                    <Phone className="h-5 w-5" />
                     End Call
                   </Button>
+                  {canSendFriendRequest && !friendRequestSent && (
+                    <Button
+                      size="lg"
+                      variant="outline"
+                      onClick={handleSendFriendRequest}
+                      className="gap-2"
+                    >
+                      <UserPlus className="h-5 w-5" />
+                      Add Friend
+                    </Button>
+                  )}
                 </div>
 
-                {canSendFriendRequest && !friendRequestSent && (
-                  <Button
-                    variant="outline"
-                    onClick={handleSendFriendRequest}
-                    className="w-full"
-                  >
-                    <UserPlus className="mr-2 h-5 w-5" />
-                    Send Friend Request
-                  </Button>
-                )}
-
                 {friendRequestSent && (
-                  <div className="text-center text-sm text-success">
-                    ✓ Friend request sent!
-                  </div>
+                  <p className="text-center text-sm text-success">
+                    Friend request sent! 🐾
+                  </p>
                 )}
               </div>
             )}
 
+            {/* Ended State */}
             {connectionState === 'ended' && (
               <div className="text-center space-y-6">
                 <div className="flex justify-center">
-                  <img
-                    src="/assets/generated/happy-cat-success-transparent.dim_48x48.png"
-                    alt="Success"
-                    className="h-24 w-24"
-                  />
+                  <div className="h-32 w-32 rounded-full bg-muted flex items-center justify-center">
+                    <img src="/assets/generated/cat-paw-icon-transparent.dim_64x64.png" alt="Cat Paw" className="h-16 w-16 opacity-50" />
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <h2 className="text-2xl font-bold">Call Ended</h2>
@@ -750,6 +687,68 @@ export default function MatchingPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Diagnostics Panel */}
+        {(connectionState === 'connecting' || connectionState === 'connected') && (
+          <Collapsible open={showDiagnostics} onOpenChange={setShowDiagnostics}>
+            <Card className="border-muted">
+              <CardContent className="p-4">
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" size="sm" className="w-full justify-between">
+                    <span className="flex items-center gap-2">
+                      <Info className="h-4 w-4" />
+                      Connection Diagnostics
+                    </span>
+                    <ChevronDown className={`h-4 w-4 transition-transform ${showDiagnostics ? 'rotate-180' : ''}`} />
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="mt-4 space-y-2 text-sm">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-muted-foreground">Signaling State:</span>
+                      <span className="ml-2 font-mono">{connection.diagnostics.signalingState}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">ICE Connection:</span>
+                      <span className="ml-2 font-mono">{connection.diagnostics.iceConnectionState}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">ICE Gathering:</span>
+                      <span className="ml-2 font-mono">{connection.diagnostics.iceGatheringState}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Connection State:</span>
+                      <span className="ml-2 font-mono">{connection.diagnostics.connectionState}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Using TURN:</span>
+                      <span className={`ml-2 font-mono ${connection.diagnostics.usingTurnServer ? 'text-success' : 'text-muted-foreground'}`}>
+                        {connection.diagnostics.usingTurnServer ? 'Yes (Relay)' : 'No'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Retry Attempts:</span>
+                      <span className="ml-2 font-mono">{connection.diagnostics.retryAttempts}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Local Tracks:</span>
+                      <span className="ml-2 font-mono">{connection.diagnostics.localTracksCount}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Remote Tracks:</span>
+                      <span className="ml-2 font-mono">{connection.diagnostics.remoteTracksCount}</span>
+                    </div>
+                  </div>
+                  {connection.diagnostics.lastError && (
+                    <div className="mt-3 p-2 bg-destructive/10 rounded text-destructive text-xs">
+                      <span className="font-semibold">Last Error:</span> {connection.diagnostics.lastError}
+                    </div>
+                  )}
+                </CollapsibleContent>
+              </CardContent>
+            </Card>
+          </Collapsible>
+        )}
       </div>
     </div>
   );

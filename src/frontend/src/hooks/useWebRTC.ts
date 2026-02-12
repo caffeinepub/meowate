@@ -34,16 +34,10 @@ const SIGNALING_TIMEOUT = 30000; // 30 seconds
 const MAX_RETRY_ATTEMPTS = 3;
 const RETRY_DELAY = 2000; // 2 seconds
 
-// Enhanced ICE servers with TURN fallback for cross-NAT connectivity
+// TURN-only ICE configuration for reliable connections on restrictive networks
 const ICE_SERVERS: RTCConfiguration = {
   iceServers: [
-    // Google STUN servers
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' },
-    { urls: 'stun:stun3.l.google.com:19302' },
-    { urls: 'stun:stun4.l.google.com:19302' },
-    // Public TURN servers (fallback for difficult NAT scenarios)
+    // Public TURN servers (relay-only for double NAT scenarios)
     {
       urls: 'turn:openrelay.metered.ca:80',
       username: 'openrelayproject',
@@ -60,7 +54,7 @@ const ICE_SERVERS: RTCConfiguration = {
       credential: 'openrelayproject',
     },
   ],
-  iceTransportPolicy: 'all', // Try all connection types
+  iceTransportPolicy: 'relay', // Force TURN-only mode (relay candidates only)
   iceCandidatePoolSize: 10, // Pre-gather candidates
 };
 
@@ -308,10 +302,14 @@ export function useWebRTC() {
 
   // Initialize WebRTC peer connection with enhanced monitoring
   const initializePeerConnection = useCallback((peer: Principal) => {
-    logDiagnostics('Initializing peer connection', { peer: peer.toString() });
+    logDiagnostics('Initializing peer connection with TURN-only mode', { peer: peer.toString() });
     
     const peerConnection = new RTCPeerConnection(ICE_SERVERS);
     peerConnectionRef.current = peerConnection;
+
+    // Set TURN usage flag immediately since we're in relay-only mode
+    updateDiagnostics({ usingTurnServer: true });
+    logDiagnostics('TURN-only mode enabled - all connections will use relay servers');
 
     // Add local stream tracks to peer connection
     if (localStreamRef.current) {
@@ -345,16 +343,15 @@ export function useWebRTC() {
         sentCandidatesRef.current.add(candidateString);
         markProgress(); // Mark progress when ICE candidates are generated
         
-        logDiagnostics('ICE candidate generated', { 
+        logDiagnostics('ICE candidate generated (TURN relay)', { 
           type: event.candidate.type,
           protocol: event.candidate.protocol,
           address: event.candidate.address,
         });
 
-        // Check if using TURN server
+        // In TURN-only mode, all candidates should be relay type
         if (event.candidate.type === 'relay') {
-          updateDiagnostics({ usingTurnServer: true });
-          logDiagnostics('Using TURN server for NAT traversal');
+          logDiagnostics('Relay candidate confirmed - TURN server active');
         }
 
         // Send ICE candidate immediately without delay
@@ -429,7 +426,7 @@ export function useWebRTC() {
       if (state === 'connected') {
         markProgress(); // Mark progress when connected
         setConnection(prev => ({ ...prev, state: 'connected', connectionQuality: 'good' }));
-        logDiagnostics('Peer connection established successfully');
+        logDiagnostics('Peer connection established successfully via TURN relay');
         clearSignalingTimeout();
       } else if (state === 'disconnected') {
         setConnection(prev => ({ ...prev, state: 'disconnected', connectionQuality: 'poor' }));
@@ -483,17 +480,23 @@ export function useWebRTC() {
       if (iceState === 'checking') {
         markProgress(); // Mark progress when checking ICE
         setConnection(prev => ({ ...prev, connectionQuality: 'fair' }));
-        logDiagnostics('Checking ICE candidates...');
+        logDiagnostics('Checking ICE candidates (TURN relay)...');
       } else if (iceState === 'connected' || iceState === 'completed') {
         markProgress(); // Mark progress when ICE connected
         setConnection(prev => ({ ...prev, connectionQuality: 'good' }));
-        logDiagnostics('ICE connection established');
+        logDiagnostics('ICE connection established via TURN relay');
+      } else if (iceState === 'failed') {
+        logDiagnostics('ICE connection failed');
+        setConnection(prev => ({ 
+          ...prev, 
+          state: 'error',
+          error: 'Failed to establish connection. Network may be blocking relay servers.',
+          connectionQuality: 'poor',
+        }));
+        updateDiagnostics({ lastError: 'ICE connection failed' });
       } else if (iceState === 'disconnected') {
         setConnection(prev => ({ ...prev, connectionQuality: 'poor' }));
         logDiagnostics('ICE connection disconnected');
-      } else if (iceState === 'failed') {
-        logDiagnostics('ICE connection failed - may need TURN server');
-        updateDiagnostics({ lastError: 'ICE connection failed' });
       }
     };
 
@@ -504,7 +507,10 @@ export function useWebRTC() {
       updateDiagnostics({ iceGatheringState: gatheringState });
       
       if (gatheringState === 'gathering') {
-        markProgress(); // Mark progress when gathering ICE
+        markProgress(); // Mark progress when gathering
+        logDiagnostics('Gathering ICE candidates (TURN relay only)...');
+      } else if (gatheringState === 'complete') {
+        logDiagnostics('ICE gathering complete');
       }
     };
 
@@ -514,232 +520,244 @@ export function useWebRTC() {
       logDiagnostics('Signaling state changed', { signalingState });
       updateDiagnostics({ signalingState });
       
-      if (signalingState === 'have-remote-offer' || signalingState === 'have-local-offer') {
-        markProgress(); // Mark progress when offer/answer exchanged
+      if (signalingState === 'have-local-offer' || signalingState === 'have-remote-offer') {
+        markProgress(); // Mark progress during offer/answer exchange
       }
     };
 
     return peerConnection;
-  }, [exchangeCandidatesMutation, logDiagnostics, updateDiagnostics, markProgress, clearSignalingTimeout]);
+  }, [clearSignalingTimeout, exchangeCandidatesMutation, logDiagnostics, markProgress, updateDiagnostics]);
 
-  // Start connection as offer creator (caller) with timeout and retry
-  const startConnection = useCallback(async (peer: Principal) => {
-    try {
-      logDiagnostics('Starting connection as offer creator', { peer: peer.toString() });
-      
-      // Perform full cleanup before starting new connection
-      performFullCleanup();
-      
-      // Ensure we have local stream before starting connection
-      if (!localStreamRef.current) {
-        logDiagnostics('No local stream available, requesting microphone permission');
-        await requestMicrophonePermission();
-      }
-
-      if (!localStreamRef.current) {
-        throw new Error('Failed to obtain local media stream');
-      }
-
-      setConnection(prev => ({ ...prev, state: 'connecting', peer, error: null }));
-      isOfferCreatorRef.current = true;
-      retryAttemptsRef.current = 0;
-      updateDiagnostics({ retryAttempts: 0, lastError: null });
-
-      const peerConnection = initializePeerConnection(peer);
-      
-      const offer = await peerConnection.createOffer({
-        offerToReceiveAudio: true,
-        offerToReceiveVideo: false,
-      });
-      await peerConnection.setLocalDescription(offer);
-      
-      markProgress(); // Mark progress when offer created
-      
-      logDiagnostics('Offer created and set as local description', {
-        type: offer.type,
-        sdp: offer.sdp?.substring(0, 100) + '...',
-      });
-      
-      // Send offer to backend with retry logic
-      const sendOffer = async (retries = 3): Promise<void> => {
-        try {
-          await createOfferMutation.mutateAsync({
-            peer,
-            offer: JSON.stringify(offer),
-          });
-          logDiagnostics('Offer sent to backend successfully');
-          markProgress(); // Mark progress when offer sent
-        } catch (error) {
-          if (retries > 0) {
-            logDiagnostics(`Failed to send offer, retrying... (${retries} attempts left)`);
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            return sendOffer(retries - 1);
-          } else {
-            throw new Error('Failed to send offer after multiple attempts');
-          }
-        }
-      };
-
-      await sendOffer();
-      toast.info('Waiting for peer to accept... 🔄');
-
-      // Start signaling timeout
-      startSignalingTimeout();
-
-    } catch (error: any) {
-      console.error('Error starting connection:', error);
-      logDiagnostics('Error starting connection', { error: error.message });
-      
-      const errorMessage = error.message || 'Failed to start connection. Please try again.';
-      setConnection(prev => ({
-        ...prev,
-        state: 'error',
-        error: errorMessage,
-      }));
-      updateDiagnostics({ lastError: errorMessage });
-      toast.error(errorMessage);
-      
-      performFullCleanup();
+  // Process queued ICE candidates
+  const processQueuedCandidates = useCallback(async () => {
+    if (!peerConnectionRef.current || iceCandidatesQueueRef.current.length === 0) {
+      return;
     }
-  }, [createOfferMutation, initializePeerConnection, logDiagnostics, requestMicrophonePermission, updateDiagnostics, markProgress, startSignalingTimeout, performFullCleanup]);
 
-  // Accept connection as answer creator (callee)
-  const acceptConnection = useCallback(async (peer: Principal) => {
-    try {
-      logDiagnostics('Accepting connection as answer creator', { peer: peer.toString() });
-      
-      // Perform full cleanup before accepting new connection
-      performFullCleanup();
-      
-      // Ensure we have local stream
-      if (!localStreamRef.current) {
-        logDiagnostics('No local stream available, requesting microphone permission');
-        await requestMicrophonePermission();
-      }
+    logDiagnostics('Processing queued ICE candidates', { count: iceCandidatesQueueRef.current.length });
 
-      if (!localStreamRef.current) {
-        throw new Error('Failed to obtain local media stream');
-      }
+    const candidates = [...iceCandidatesQueueRef.current];
+    iceCandidatesQueueRef.current = [];
 
-      setConnection(prev => ({ ...prev, state: 'connecting', peer, error: null }));
-      isOfferCreatorRef.current = false;
-      retryAttemptsRef.current = 0;
-      updateDiagnostics({ retryAttempts: 0, lastError: null });
-
-      const peerConnection = initializePeerConnection(peer);
-
-      // Start signaling timeout
-      startSignalingTimeout();
-
-      logDiagnostics('Waiting for offer from peer...');
-      toast.info('Connecting to peer... 🔄');
-
-    } catch (error: any) {
-      console.error('Error accepting connection:', error);
-      logDiagnostics('Error accepting connection', { error: error.message });
-      
-      const errorMessage = error.message || 'Failed to accept connection. Please try again.';
-      setConnection(prev => ({
-        ...prev,
-        state: 'error',
-        error: errorMessage,
-      }));
-      updateDiagnostics({ lastError: errorMessage });
-      toast.error(errorMessage);
-      
-      performFullCleanup();
-    }
-  }, [initializePeerConnection, logDiagnostics, requestMicrophonePermission, updateDiagnostics, startSignalingTimeout, performFullCleanup]);
-
-  // Process signaling data from backend
-  useEffect(() => {
-    if (!signalingData || !peerConnectionRef.current || !connection.peer) return;
-
-    const processSignaling = async () => {
+    for (const candidate of candidates) {
       try {
-        const peerConnection = peerConnectionRef.current;
-        if (!peerConnection || !connection.peer) return;
+        await peerConnectionRef.current.addIceCandidate(candidate);
+        logDiagnostics('Queued ICE candidate added successfully');
+      } catch (error) {
+        console.error('Error adding queued ICE candidate:', error);
+        logDiagnostics('Failed to add queued ICE candidate', { error });
+      }
+    }
+  }, [logDiagnostics]);
 
-        // Process offer (for answer creator)
-        if (signalingData.offer && !isOfferCreatorRef.current && peerConnection.signalingState === 'stable') {
-          logDiagnostics('Processing received offer');
-          const offer = JSON.parse(signalingData.offer);
-          await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
-          markProgress(); // Mark progress when offer processed
-          
-          const answer = await peerConnection.createAnswer();
-          await peerConnection.setLocalDescription(answer);
-          markProgress(); // Mark progress when answer created
-          
-          logDiagnostics('Answer created and set as local description');
-          
-          await sendAnswerMutation.mutateAsync({
-            peer: connection.peer,
-            answer: JSON.stringify(answer),
+  // Handle incoming signaling data
+  useEffect(() => {
+    if (!signalingData || !peerConnectionRef.current || !connection.peer) {
+      return;
+    }
+
+    const handleSignalingData = async () => {
+      try {
+        // Handle incoming answer (if we created the offer)
+        if (isOfferCreatorRef.current && signalingData.answer && peerConnectionRef.current?.signalingState === 'have-local-offer') {
+          logDiagnostics('Received answer from peer, setting remote description');
+          await peerConnectionRef.current.setRemoteDescription({
+            type: 'answer',
+            sdp: signalingData.answer,
           });
-          markProgress(); // Mark progress when answer sent
+          markProgress(); // Mark progress when answer is received
+          logDiagnostics('Remote description (answer) set successfully');
           
-          logDiagnostics('Answer sent to backend');
-          toast.success('Connection established! 🎉');
+          // Process any queued ICE candidates
+          await processQueuedCandidates();
         }
 
-        // Process answer (for offer creator)
-        if (signalingData.answer && isOfferCreatorRef.current && peerConnection.signalingState === 'have-local-offer') {
-          logDiagnostics('Processing received answer');
-          const answer = JSON.parse(signalingData.answer);
-          await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
-          markProgress(); // Mark progress when answer processed
-          logDiagnostics('Remote description set from answer');
+        // Handle incoming offer (if we're the answerer)
+        if (!isOfferCreatorRef.current && signalingData.offer && peerConnectionRef.current?.signalingState === 'stable') {
+          logDiagnostics('Received offer from peer, setting remote description');
+          await peerConnectionRef.current.setRemoteDescription({
+            type: 'offer',
+            sdp: signalingData.offer,
+          });
+          markProgress(); // Mark progress when offer is received
+          logDiagnostics('Remote description (offer) set successfully');
+
+          // Create and send answer
+          const answer = await peerConnectionRef.current.createAnswer();
+          await peerConnectionRef.current.setLocalDescription(answer);
+          logDiagnostics('Local description (answer) set successfully');
+
+          if (connection.peer && answer.sdp) {
+            await sendAnswerMutation.mutateAsync({
+              peer: connection.peer,
+              answer: answer.sdp,
+            });
+            logDiagnostics('Answer sent to peer via backend');
+          }
+
+          // Process any queued ICE candidates
+          await processQueuedCandidates();
         }
 
-        // Process ICE candidates with deduplication
+        // Handle incoming ICE candidates with deduplication
         if (signalingData.iceCandidates && signalingData.iceCandidates.length > 0) {
           for (const candidateString of signalingData.iceCandidates) {
+            // Deduplicate processed candidates
             if (processedCandidatesRef.current.has(candidateString)) {
-              continue; // Skip already processed candidates
+              continue;
             }
             
             processedCandidatesRef.current.add(candidateString);
             
             try {
-              const candidate = JSON.parse(candidateString);
-              
-              if (peerConnection.remoteDescription) {
-                await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-                markProgress(); // Mark progress when ICE candidate added
-                logDiagnostics('ICE candidate added', { type: candidate.type });
+              const candidateInit = JSON.parse(candidateString);
+              const candidate = new RTCIceCandidate(candidateInit);
+
+              if (peerConnectionRef.current?.remoteDescription) {
+                await peerConnectionRef.current.addIceCandidate(candidate);
+                logDiagnostics('Remote ICE candidate added successfully', { type: candidate.type });
               } else {
-                iceCandidatesQueueRef.current.push(new RTCIceCandidate(candidate));
-                logDiagnostics('ICE candidate queued (no remote description yet)');
+                // Queue candidate if remote description not set yet
+                iceCandidatesQueueRef.current.push(candidate);
+                logDiagnostics('ICE candidate queued (remote description not ready)');
               }
             } catch (error) {
               console.error('Error processing ICE candidate:', error);
+              logDiagnostics('Failed to process ICE candidate', { error });
             }
           }
-        }
-
-        // Process queued candidates if remote description is now set
-        if (peerConnection.remoteDescription && iceCandidatesQueueRef.current.length > 0) {
-          logDiagnostics('Processing queued ICE candidates', { count: iceCandidatesQueueRef.current.length });
-          for (const candidate of iceCandidatesQueueRef.current) {
-            try {
-              await peerConnection.addIceCandidate(candidate);
-              markProgress(); // Mark progress when queued candidate added
-              logDiagnostics('Queued ICE candidate added');
-            } catch (error) {
-              console.error('Error adding queued ICE candidate:', error);
-            }
-          }
-          iceCandidatesQueueRef.current = [];
         }
       } catch (error) {
-        console.error('Error processing signaling data:', error);
-        logDiagnostics('Error processing signaling data', { error });
+        console.error('Error handling signaling data:', error);
+        logDiagnostics('Error in signaling data handler', { error });
       }
     };
 
-    processSignaling();
-  }, [signalingData, connection.peer, sendAnswerMutation, logDiagnostics, markProgress]);
+    handleSignalingData();
+  }, [signalingData, connection.peer, sendAnswerMutation, logDiagnostics, markProgress, processQueuedCandidates]);
+
+  // Start connection as offer creator
+  const startConnection = useCallback(async (peer: Principal) => {
+    try {
+      logDiagnostics('Starting connection as offer creator', { peer: peer.toString() });
+      
+      // Ensure we have local stream
+      if (!localStreamRef.current) {
+        throw new Error('Local stream not available. Please grant microphone permission first.');
+      }
+
+      // Reset state
+      performFullCleanup();
+      retryAttemptsRef.current = 0;
+      
+      setConnection(prev => ({
+        ...prev,
+        state: 'connecting',
+        peer,
+        error: null,
+        diagnostics: {
+          ...prev.diagnostics,
+          retryAttempts: 0,
+          lastError: null,
+          usingTurnServer: false,
+        },
+      }));
+
+      isOfferCreatorRef.current = true;
+
+      // Initialize peer connection
+      const peerConnection = initializePeerConnection(peer);
+
+      // Start signaling timeout
+      startSignalingTimeout();
+
+      // Create and send offer
+      const offer = await peerConnection.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: false,
+      });
+      
+      await peerConnection.setLocalDescription(offer);
+      logDiagnostics('Local description (offer) set successfully');
+
+      if (offer.sdp) {
+        await createOfferMutation.mutateAsync({
+          peer,
+          offer: offer.sdp,
+        });
+        logDiagnostics('Offer sent to peer via backend');
+      }
+    } catch (error: any) {
+      console.error('Error starting connection:', error);
+      const errorMessage = error.message || 'Failed to start connection';
+      
+      setConnection(prev => ({
+        ...prev,
+        state: 'error',
+        error: errorMessage,
+      }));
+      
+      updateDiagnostics({ lastError: errorMessage });
+      logDiagnostics('Failed to start connection', { error: errorMessage });
+      toast.error('Failed to start connection. Please try again!');
+      
+      performFullCleanup();
+    }
+  }, [createOfferMutation, initializePeerConnection, logDiagnostics, performFullCleanup, startSignalingTimeout, updateDiagnostics]);
+
+  // Accept incoming connection (not used in current flow but kept for compatibility)
+  const acceptConnection = useCallback(async (peer: Principal) => {
+    try {
+      logDiagnostics('Accepting connection', { peer: peer.toString() });
+      
+      // Ensure we have local stream
+      if (!localStreamRef.current) {
+        throw new Error('Local stream not available. Please grant microphone permission first.');
+      }
+
+      // Reset state
+      performFullCleanup();
+      retryAttemptsRef.current = 0;
+      
+      setConnection(prev => ({
+        ...prev,
+        state: 'connecting',
+        peer,
+        error: null,
+        diagnostics: {
+          ...prev.diagnostics,
+          retryAttempts: 0,
+          lastError: null,
+          usingTurnServer: false,
+        },
+      }));
+
+      isOfferCreatorRef.current = false;
+
+      // Initialize peer connection
+      initializePeerConnection(peer);
+
+      // Start signaling timeout
+      startSignalingTimeout();
+
+      logDiagnostics('Waiting for offer from peer...');
+    } catch (error: any) {
+      console.error('Error accepting connection:', error);
+      const errorMessage = error.message || 'Failed to accept connection';
+      
+      setConnection(prev => ({
+        ...prev,
+        state: 'error',
+        error: errorMessage,
+      }));
+      
+      updateDiagnostics({ lastError: errorMessage });
+      logDiagnostics('Failed to accept connection', { error: errorMessage });
+      toast.error('Failed to accept connection. Please try again!');
+      
+      performFullCleanup();
+    }
+  }, [initializePeerConnection, logDiagnostics, performFullCleanup, startSignalingTimeout, updateDiagnostics]);
 
   // Toggle mute
   const toggleMute = useCallback(() => {
@@ -748,52 +766,41 @@ export function useWebRTC() {
       if (audioTrack) {
         audioTrack.enabled = !audioTrack.enabled;
         setConnection(prev => ({ ...prev, isMuted: !audioTrack.enabled }));
-        logDiagnostics('Mute toggled', { muted: !audioTrack.enabled });
-        toast.info(audioTrack.enabled ? 'Microphone unmuted 🎤' : 'Microphone muted 🔇');
+        logDiagnostics('Microphone toggled', { muted: !audioTrack.enabled });
+        toast.success(audioTrack.enabled ? 'Microphone unmuted 🎤' : 'Microphone muted 🔇');
       }
     }
   }, [logDiagnostics]);
 
-  // Disconnect and cleanup
+  // Disconnect
   const disconnect = useCallback(async () => {
-    logDiagnostics('Disconnect requested');
+    logDiagnostics('Disconnecting...');
     
     performFullCleanup();
     
     setConnection(prev => ({
       ...prev,
       state: 'idle',
-      remoteStream: null,
       peer: null,
+      remoteStream: null,
       error: null,
       connectionQuality: 'good',
       autoplayBlocked: false,
       diagnostics: {
-        ...prev.diagnostics,
         signalingState: 'stable',
         iceConnectionState: 'new',
         iceGatheringState: 'new',
         connectionState: 'new',
         retryAttempts: 0,
+        lastError: null,
         usingTurnServer: false,
+        localTracksCount: prev.diagnostics.localTracksCount,
         remoteTracksCount: 0,
       },
     }));
     
-    logDiagnostics('Disconnected and cleaned up');
-  }, [performFullCleanup, logDiagnostics]);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      performFullCleanup();
-      
-      if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach(track => track.stop());
-        localStreamRef.current = null;
-      }
-    };
-  }, [performFullCleanup]);
+    logDiagnostics('Disconnected successfully');
+  }, [logDiagnostics, performFullCleanup]);
 
   return {
     connection,

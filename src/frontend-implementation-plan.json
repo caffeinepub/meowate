@@ -1,42 +1,26 @@
 {
   "kind": "implementation_plan",
   "version": "1.0",
-  "title": "Fix Matching UI indefinite connecting and add WebRTC diagnostics panel",
+  "title": "Force TURN-only ICE for matchmaking voice calls",
   "requirements": [
     {
-      "id": "REQ-4",
-      "summary": "Make the WebRTC connection flow reliably time out with a visible error and allow clean retry without reusing stale peer/signaling state.",
+      "id": "REQ-1",
+      "summary": "Enforce TURN-only (relay-only) ICE behavior for matchmaking WebRTC voice calls to reduce \"failed to match\" errors on restrictive networks.",
       "acceptanceCriteria": [
-        "If a connection attempt makes no progress for the configured timeout window, the UI shows a visible error state (Connection Error alert) and provides a retry action.",
-        "The UI does not remain stuck in “connecting” after a timeout; it returns to a consistent recoverable state (idle/searching).",
-        "Retrying after a timeout attempts a new match and does not reuse the previous peer/signaling state."
+        "In frontend/src/hooks/useWebRTC.ts, RTCPeerConnection is created with an RTCConfiguration that enforces TURN-only behavior (e.g., iceTransportPolicy set to \"relay\").",
+        "When attempting a match on restrictive networks (e.g., double NAT), ICE candidates generated/sent are relay candidates, and the diagnostics field usingTurnServer becomes true during the connection attempt.",
+        "No regression: matching flow still transitions out of \"connecting\" via the existing timeout/error handling if the relay connection cannot be established."
       ],
       "file_operations": [
         {
           "path": "frontend/src/hooks/useWebRTC.ts",
           "operation": "modify",
-          "description": "Harden the WebRTC timeout/retry logic so it cannot get stuck due to stale React closures: track current connection state/progress via refs, start/clear the signaling timeout deterministically, and ensure timeout transitions the hook to an error state (with an English error message) and performs a full cleanup. Ensure disconnect/cleanup clears RTCPeerConnection handlers, candidate queues/dedupe sets, timers, and local/remote stream refs; and invoke existing signaling cleanup (useCleanupSignalingState) for the current peer so subsequent retries start with fresh signaling state."
+          "description": "Update the WebRTC RTCConfiguration used to construct RTCPeerConnection to TURN-only by setting iceTransportPolicy to \"relay\" (and adjusting ICE server list/behavior as needed so only relay candidates are used/sent). Ensure diagnostics.usingTurnServer is reliably set true during connection attempts when relay candidates are gathered/used, and keep existing timeout/retry/cleanup behavior intact to avoid regressions."
         },
         {
           "path": "frontend/src/pages/MatchingPage.tsx",
           "operation": "modify",
-          "description": "Ensure MatchingPage reacts consistently when useWebRTC enters an error/timeout path: immediately reset the page-level connectionState/matchedPeer to a recoverable state (idle) while preserving the Connection Error alert with a Retry action. Ensure the retry action always forces a clean disconnect first, then starts a brand-new match attempt (no reuse of previous peer/signaling state). Keep all user-facing text in English."
-        }
-      ]
-    },
-    {
-      "id": "REQ-5",
-      "summary": "Add clear matching/connecting status messaging and a toggleable diagnostics panel exposing current WebRTC diagnostic fields.",
-      "acceptanceCriteria": [
-        "During searching/connecting, the UI displays a human-readable status that updates as WebRTC states change.",
-        "A diagnostics panel can be toggled on the Matching page and shows the current values from connection.diagnostics.",
-        "All user-facing text is in English."
-      ],
-      "file_operations": [
-        {
-          "path": "frontend/src/pages/MatchingPage.tsx",
-          "operation": "modify",
-          "description": "Add a concise, human-readable status line for the current phase (searching/connecting/connected/error) and update it based on useWebRTC state changes (signalingState, iceConnectionState, connectionState). Implement a Collapsible diagnostics panel (using the existing Collapsible/CollapsibleTrigger/CollapsibleContent imports) that can be toggled and displays: signalingState, iceConnectionState, iceGatheringState, connectionState, retryAttempts, usingTurnServer (from connection.diagnostics). Ensure all labels/help text are in English and the diagnostics panel is wired into the rendered Matching page (not orphaned)."
+          "description": "Verify the diagnostics UI surfaces TURN usage clearly during connection attempts (using connection.diagnostics.usingTurnServer). If not currently shown, add a read-only diagnostics row so testers can confirm TURN-only behavior without needing console logs; do not change the existing matching state machine or timeout/error handling."
         }
       ]
     }

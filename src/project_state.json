@@ -1,28 +1,20 @@
 {
   "schemaVersion": "1.0.0",
   "projectStateVersion": 3,
-  "summary": "WebRTC random-stranger video chat website with onboarding; users report inability to search/connect and WebRTC calls stuck on “connecting” with no error. User asks whether a database can support matchmaking/presence.",
+  "summary": "WebRTC-based matchmaking app; users report \"failed to match\" due to connectivity/ICE issues and want a fix by enabling TURN relay fallback (TURN-only mode) for reliable connections across Wi‑Fi and mobile data.",
   "architectural_notes": [
-    "Random-stranger WebRTC requires matchmaking + signaling (offer/answer/ICE) plus STUN/TURN; consider persisting presence/match state in a database or fast store to coordinate live users."
+    "WebRTC matchmaking depends on successful signaling + ICE candidate exchange; add TURN relay support (potentially TURN-only) to handle restrictive networks/double NAT."
   ],
   "known_issues": [
-    "WebRTC calls with random people get stuck on “connecting” indefinitely with no message/error."
+    "Users see \"failed to match\" when WebRTC handshake/ICE does not complete; likely missing TURN relay fallback in restrictive network conditions (e.g., double NAT)."
   ],
   "isFixRequest": true,
   "existing_features": [
     {
-      "id": "feature-fix-the-frontend-webrtc-flow-so-the-user-never-sees-an-indefinite-connecting-state-with-no-message-ensure-the-existing-timeout-logic-in-the-webrtc-hook-reliably-triggers-and-surfaces-an-error-when-no-answer-ice-progress-occurs-and-ensure-matchingpage-reacts-by-returning-to-idle-and-offering-a-retry-next-action",
-      "title": "Fix the frontend WebRTC flow so the user never sees an indefinite “connecting” state with no message. Ensure the existing timeout logic in the WebRTC hook reliably triggers and surfaces an error when no answer/ICE progress occurs, and ensure MatchingPage reacts by returning to idle and offering a retry/next action.",
+      "id": "feature-update-the-webrtc-configuration-so-matchmaking-voice-calls-use-turn-only-relay-only-ice-forcing-connections-to-be-established-via-turn-relay-instead-of-attempting-direct-p2p-host-srflx-candidates",
+      "title": "Update the WebRTC configuration so matchmaking voice calls use TURN-only (relay-only) ICE, forcing connections to be established via TURN relay instead of attempting direct P2P (host/srflx) candidates.",
       "reqIds": [
-        "REQ-4"
-      ],
-      "version": 1
-    },
-    {
-      "id": "feature-improve-user-facing-diagnostics-on-the-matching-page-during-connection-attempts-show-a-clear-status-message-while-searching-connecting-and-provide-a-collapsible-diagnostics-panel-that-exposes-key-webrtc-diagnostic-fields-already-tracked-signalingstate-iceconnectionstate-icegatheringstate-connectionstate-retryattempts-usingturnserver",
-      "title": "Improve user-facing diagnostics on the Matching page during connection attempts: show a clear status message while searching/connecting, and provide a collapsible diagnostics panel that exposes key WebRTC diagnostic fields already tracked (signalingState, iceConnectionState, iceGatheringState, connectionState, retryAttempts, usingTurnServer).",
-      "reqIds": [
-        "REQ-5"
+        "REQ-1"
       ],
       "version": 1
     }
@@ -30,50 +22,12 @@
   "new_feature_requests": [
     {
       "id": "AR-1",
-      "summary": "Database-backed presence + matchmaking queue for random-stranger chat (track available users, match pairs, handle next/leave)",
+      "summary": "Improve matchmaking reliability by enabling TURN relay fallback (TURN-only mode) to resolve \"failed to match\" WebRTC connection failures",
       "reqIds": [],
-      "status": "pending"
-    },
-    {
-      "id": "AR-2",
-      "summary": "Add connection diagnostics/feedback when WebRTC is stuck (timeouts, error messages, retry/next behavior)",
-      "reqIds": [],
-      "status": "pending"
-    },
-    {
-      "id": "AR-3",
-      "summary": "Update the backend matchmaking API so that attempting to find a peer never traps just because no peers are available. Specifically, change matchmaking to return a safe “no peer available” result (e.g., null/optional) instead of Debug.trap when the active pool is empty, and ensure callers can distinguish between (a) not onboarded, (b) not active, and (c) no peers currently available.",
-      "reqIds": [
-        "REQ-1"
-      ],
-      "status": "pending"
-    },
-    {
-      "id": "AR-4",
-      "summary": "Implement database-like, persistent backend state for presence and matchmaking so the app can reliably support “random stranger” matching. Store and manage: (1) who is currently online/active, (2) who is currently waiting to be matched, and (3) current active pairings, with support for users leaving/next/end. Use Internet Computer canister stable state so this data is not lost on upgrade.",
-      "reqIds": [
-        "REQ-2"
-      ],
-      "status": "pending"
-    },
-    {
-      "id": "AR-5",
-      "summary": "Add backend-side signaling/session cleanup rules so that stale signaling records cannot cause the UI to remain in “connecting” with no feedback. Add expiration/cleanup logic based on SignalingData.lastUpdated, and ensure a caller can explicitly clean up signaling state with a peer when retrying or skipping.",
-      "reqIds": [
-        "REQ-3"
-      ],
-      "status": "pending"
-    },
-    {
-      "id": "AR-8",
-      "summary": "If adding stable persistent state changes the backend actor state layout, implement a conditional Motoko migration in backend/migration.mo so existing deployed state can be upgraded without data loss or traps.",
-      "reqIds": [
-        "REQ-6"
-      ],
-      "status": "pending"
+      "status": "in_progress"
     }
   ],
-  "projectName": "Fix WebRTC matchmaking stuck on “connecting” and add persistent presence/matchmaking state",
+  "projectName": "Enable TURN-only mode to reduce WebRTC \"failed to match\" errors",
   "clarification_mode": "instant",
   "clarification_rounds": 0
 }

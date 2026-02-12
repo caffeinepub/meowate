@@ -2,8 +2,8 @@
   "kind": "feature_evidence_report",
   "features": [
     {
-      "featureId": "feature-fix-the-frontend-webrtc-flow-so-the-user-never-sees-an-indefinite-connecting-state-with-no-message-ensure-the-existing-timeout-logic-in-the-webrtc-hook-reliably-triggers-and-surfaces-an-error-when-no-answer-ice-progress-occurs-and-ensure-matchingpage-reacts-by-returning-to-idle-and-offering-a-retry-next-action",
-      "featureTitle": "Fix the frontend WebRTC flow so the user never sees an indefinite “connecting” state with no message. Ensure the existing timeout logic in the WebRTC hook reliably triggers and surfaces an error when no answer/ICE progress occurs, and ensure MatchingPage reacts by returning to idle and offering a retry/next action.",
+      "featureId": "feature-update-the-webrtc-configuration-so-matchmaking-voice-calls-use-turn-only-relay-only-ice-forcing-connections-to-be-established-via-turn-relay-instead-of-attempting-direct-p2p-host-srflx-candidates",
+      "featureTitle": "Update the WebRTC configuration so matchmaking voice calls use TURN-only (relay-only) ICE, forcing connections to be established via TURN relay instead of attempting direct P2P (host/srflx) candidates.",
       "files": [
         "frontend/src/hooks/useWebRTC.ts",
         "frontend/src/pages/MatchingPage.tsx"
@@ -20,29 +20,7 @@
         "github-export-icp-cli@1.0.0"
       ],
       "testIds": [
-        "REQ-4"
-      ],
-      "confidence": "high"
-    },
-    {
-      "featureId": "feature-improve-user-facing-diagnostics-on-the-matching-page-during-connection-attempts-show-a-clear-status-message-while-searching-connecting-and-provide-a-collapsible-diagnostics-panel-that-exposes-key-webrtc-diagnostic-fields-already-tracked-signalingstate-iceconnectionstate-icegatheringstate-connectionstate-retryattempts-usingturnserver",
-      "featureTitle": "Improve user-facing diagnostics on the Matching page during connection attempts: show a clear status message while searching/connecting, and provide a collapsible diagnostics panel that exposes key WebRTC diagnostic fields already tracked (signalingState, iceConnectionState, iceGatheringState, connectionState, retryAttempts, usingTurnServer).",
-      "files": [
-        "frontend/src/pages/MatchingPage.tsx"
-      ],
-      "components": [
-        "authorization@1.0.1",
-        "blob-storage@2.0.3",
-        "stripe@1.0.1",
-        "http-outcalls@1.1.1",
-        "core-infrastructure@1.0.2",
-        "shadcn-ui@1.0.0",
-        "build-template-react@1.0.0",
-        "initial-app@1.0.0",
-        "github-export-icp-cli@1.0.0"
-      ],
-      "testIds": [
-        "REQ-5"
+        "REQ-1"
       ],
       "confidence": "high"
     }

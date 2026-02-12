@@ -1,131 +1,36 @@
 {
   "kind": "build_request",
-  "title": "Fix WebRTC matchmaking stuck on “connecting” and add persistent presence/matchmaking state",
-  "priority": "high",
+  "title": "Enable TURN-only mode to reduce WebRTC \"failed to match\" errors",
+  "priority": "normal",
   "requirements": [
     {
       "id": "REQ-1",
-      "text": "Update the backend matchmaking API so that attempting to find a peer never traps just because no peers are available. Specifically, change matchmaking to return a safe “no peer available” result (e.g., null/optional) instead of Debug.trap when the active pool is empty, and ensure callers can distinguish between (a) not onboarded, (b) not active, and (c) no peers currently available.",
-      "target": "backend",
+      "text": "Update the WebRTC configuration so matchmaking voice calls use TURN-only (relay-only) ICE, forcing connections to be established via TURN relay instead of attempting direct P2P (host/srflx) candidates.",
+      "target": "frontend",
       "source": {
         "messageIds": [
           "msg-1",
           "msg-2"
         ],
         "quotes": [
-          "No message nothing just connecting also can your database do that",
-          "Why webrtc is failing to connect with random people on the website live who's using to talk to people strangers"
+          "Want me to enable TURN-only mode for your app?",
+          "Okay"
         ]
       },
       "acceptanceCriteria": [
-        "Calling the matchmaking method when there are 0 eligible peers returns a non-trapping result that the frontend can treat as “no users available right now”.",
-        "Onboarding/authorization/activity failures continue to produce explicit, actionable errors (not a generic trap).",
-        "Frontend’s existing parsing in useFindEligiblePeer (which treats “No eligible peers/No active users” as null) continues to work without infinite “connecting”."
-      ]
-    },
-    {
-      "id": "REQ-2",
-      "text": "Implement database-like, persistent backend state for presence and matchmaking so the app can reliably support “random stranger” matching. Store and manage: (1) who is currently online/active, (2) who is currently waiting to be matched, and (3) current active pairings, with support for users leaving/next/end. Use Internet Computer canister stable state so this data is not lost on upgrade.",
-      "target": "backend",
-      "source": {
-        "messageIds": [
-          "msg-1"
-        ],
-        "quotes": [
-          "also can your database do that"
-        ]
-      },
-      "acceptanceCriteria": [
-        "Backend maintains a deterministic matchmaking queue/pool (join, leave) and returns valid peers that are not already matched.",
-        "Backend prevents matching a user with themselves and prevents matching users who are not active/onboarded.",
-        "Backend provides a way to end a match/leave the queue so “Next”/disconnect can return both users to an appropriate state.",
-        "Presence/matchmaking state persists across canister upgrades (stable storage), with a working upgrade path (see REQ-6)."
-      ]
-    },
-    {
-      "id": "REQ-3",
-      "text": "Add backend-side signaling/session cleanup rules so that stale signaling records cannot cause the UI to remain in “connecting” with no feedback. Add expiration/cleanup logic based on SignalingData.lastUpdated, and ensure a caller can explicitly clean up signaling state with a peer when retrying or skipping.",
-      "target": "backend",
-      "source": {
-        "messageIds": [
-          "msg-1"
-        ],
-        "quotes": [
-          "No message nothing just connecting"
-        ]
-      },
-      "acceptanceCriteria": [
-        "Signaling state older than a defined timeout is treated as expired and does not block new attempts.",
-        "A cleanup call fully removes both directions of signaling keys for the pair.",
-        "Retrying a match after cleanup results in fresh signaling state (no reuse of stale offer/answer/candidates)."
-      ]
-    },
-    {
-      "id": "REQ-4",
-      "text": "Fix the frontend WebRTC flow so the user never sees an indefinite “connecting” state with no message. Ensure the existing timeout logic in the WebRTC hook reliably triggers and surfaces an error when no answer/ICE progress occurs, and ensure MatchingPage reacts by returning to idle and offering a retry/next action.",
-      "target": "frontend",
-      "source": {
-        "messageIds": [
-          "msg-1"
-        ],
-        "quotes": [
-          "No message nothing just connecting"
-        ]
-      },
-      "acceptanceCriteria": [
-        "If a connection attempt makes no progress for the configured timeout window, the UI shows a visible error state (Connection Error alert) and provides a retry action.",
-        "The UI does not remain stuck in “connecting” after a timeout; it returns to a consistent recoverable state (idle/searching).",
-        "Retrying after a timeout attempts a new match and does not reuse the previous peer/signaling state."
-      ]
-    },
-    {
-      "id": "REQ-5",
-      "text": "Improve user-facing diagnostics on the Matching page during connection attempts: show a clear status message while searching/connecting, and provide a collapsible diagnostics panel that exposes key WebRTC diagnostic fields already tracked (signalingState, iceConnectionState, iceGatheringState, connectionState, retryAttempts, usingTurnServer).",
-      "target": "frontend",
-      "source": {
-        "messageIds": [
-          "msg-1"
-        ],
-        "quotes": [
-          "No message nothing just connecting"
-        ]
-      },
-      "acceptanceCriteria": [
-        "During searching/connecting, the UI displays a human-readable status that updates as WebRTC states change.",
-        "A diagnostics panel can be toggled on the Matching page and shows the current values from connection.diagnostics.",
-        "All user-facing text is in English."
-      ]
-    },
-    {
-      "id": "REQ-6",
-      "text": "If adding stable persistent state changes the backend actor state layout, implement a conditional Motoko migration in backend/migration.mo so existing deployed state can be upgraded without data loss or traps.",
-      "target": "backend",
-      "source": {
-        "messageIds": [
-          "msg-1"
-        ],
-        "quotes": [
-          "also can your database do that"
-        ]
-      },
-      "acceptanceCriteria": [
-        "Upgrading from the current deployed version to the new version succeeds without trapping.",
-        "Existing critical user data (at minimum userProfiles) remains accessible after upgrade.",
-        "New stable fields are initialized safely when upgrading from older state."
+        "In frontend/src/hooks/useWebRTC.ts, RTCPeerConnection is created with an RTCConfiguration that enforces TURN-only behavior (e.g., iceTransportPolicy set to \"relay\").",
+        "When attempting a match on restrictive networks (e.g., double NAT), ICE candidates generated/sent are relay candidates, and the diagnostics field usingTurnServer becomes true during the connection attempt.",
+        "No regression: matching flow still transitions out of \"connecting\" via the existing timeout/error handling if the relay connection cannot be established."
       ]
     }
   ],
   "constraints": [
-    "Backend must remain a single-actor Motoko canister (all logic in backend/main.mo).",
-    "Only create/modify backend/migration.mo when required by a state layout change (conditional migration policy).",
-    "Do not edit files under frontend/src/components/ui or other paths listed as immutable in SYSTEM_CONTEXT.",
-    "Use English for any user-facing text."
+    "Backend must remain a single Motoko actor in backend/main.mo; do not introduce additional canisters/services.",
+    "Do not edit frontend immutable paths: frontend/src/hooks/useInternetIdentity.ts, frontend/src/hooks/useInternetIdentity.tsx, frontend/src/hooks/useActor.ts, frontend/src/main.tsx, and anything under frontend/src/components/ui."
   ],
   "nonGoals": [
-    "Adding third-party authentication providers (only Internet Identity is supported).",
-    "Adding external databases or non-IC storage services.",
-    "Implementing real-time communication via WebSockets/Socket.io (use existing polling/queries approach).",
-    "Adding new product features unrelated to fixing matchmaking/connectivity (e.g., new monetization, new social network features)."
+    "Adding or integrating a private/paid TURN provider or credential management UI.",
+    "Implementing new backend signaling protocols or changing matchmaking algorithms beyond what is required to force TURN-only ICE."
   ],
   "imageRequirements": {
     "required": [],

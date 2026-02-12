@@ -1,56 +1,38 @@
 {
   "kind": "spec_vs_diff_report",
   "version": "1.0",
-  "generatedAt": "2026-02-06T19:44:59.484Z",
-  "summary": "The diff primarily updates frontend WebRTC UX (timeouts/diagnostics/retry flow) and adds expanded ICE server configuration, but it does not provide clear evidence of the required backend matchmaking/presence persistence, safe non-trapping matchmaking results, signaling expiration rules, or conditional stable-state migration support.",
+  "generatedAt": "2026-02-06T20:42:44.353Z",
+  "summary": "REQ-1 is partially implemented: `frontend/src/hooks/useWebRTC.ts` now configures TURN-only ICE via `iceTransportPolicy: 'relay'` and includes TURN servers. However, the diff summary does not show evidence that relay-only candidates are actually detected and that `diagnostics.usingTurnServer` is set to `true` during connection attempts. Additional UI/diagnostics changes appear to have been added beyond the requested configuration change.",
   "missing_requirements": [
     {
       "id": "REQ-1",
-      "requirement": "Update the backend matchmaking API so finding a peer never traps when no peers are available; return a safe “no peer available” result and distinguish (a) not onboarded, (b) not active, (c) no peers available.",
-      "reason": "backend/main.mo changes shown only include type/var declarations; there is no evidence in the diff summary of a modified matchmaking method that removes Debug.trap on empty pools or returns an optional/null result with distinct error cases.",
+      "requirement": "When attempting a match on restrictive networks, ICE candidates generated/sent are relay candidates, and the diagnostics field usingTurnServer becomes true during the connection attempt.",
+      "reason": "The diff shows `iceTransportPolicy: 'relay'` and TURN servers, but does not show any logic that inspects candidate types (e.g., `relay`) or updates `diagnostics.usingTurnServer` to `true` during the attempt. The file is truncated and no relevant update code is visible in the provided excerpt.",
       "evidence": [
-        "backend/main.mo"
-      ]
-    },
-    {
-      "id": "REQ-2",
-      "requirement": "Implement persistent (stable) backend state for presence + matchmaking (online/active users, waiting queue, active pairings) with join/leave/end/next behavior and deterministic matching rules.",
-      "reason": "The diff shows transient OrderedMap-based in-memory vars (e.g., activeUsers, signalingStorage) but no evidence of stable storage fields, queue/pairing management APIs, or upgrade-safe persistence mechanisms for presence/matchmaking state.",
-      "evidence": [
-        "backend/main.mo"
-      ]
-    },
-    {
-      "id": "REQ-3",
-      "requirement": "Add backend signaling/session cleanup rules: expiration based on SignalingData.lastUpdated and an explicit cleanup call that removes both directions so stale signaling doesn’t block reconnects.",
-      "reason": "Although SignalingData includes lastUpdated, the diff summary does not show any backend logic implementing expiration/cleanup behavior or a backend method that removes both signaling keys for a pair.",
-      "evidence": [
-        "backend/main.mo"
-      ]
-    },
-    {
-      "id": "REQ-6",
-      "requirement": "If state layout changes, implement a conditional Motoko migration in backend/migration.mo to allow upgrades without traps and preserve existing userProfiles at minimum.",
-      "reason": "No backend/migration.mo changes are present in the diff summary, and backend/main.mo does not show stable-state layout or upgrade hooks that would satisfy conditional migration/upgrade-path acceptance criteria.",
-      "evidence": [
-        "backend/main.mo"
+        "frontend/src/hooks/useWebRTC.ts (truncated)"
       ]
     }
   ],
   "hallucinated_features": [
     {
-      "description": "Added public TURN server configuration (openrelay.metered.ca) and expanded ICE server list with TURN credentials.",
-      "reason": "The BuildRequest focuses on fixing matchmaking/presence/signaling cleanup and frontend timeout/diagnostics; it does not request adding third-party TURN infrastructure or hard-coded public TURN credentials.",
+      "description": "Added a comprehensive WebRTC troubleshooting/diagnostics UI on the matching page (toggleable diagnostics panel, human-readable status messaging, retry flow, TURN relay usage indicator with icon).",
+      "reason": "REQ-1 only requests enforcing TURN-only ICE behavior and having `usingTurnServer` become true; it does not request new troubleshooting UI or status messaging changes in the matching page.",
       "evidence": [
-        "frontend/src/hooks/useWebRTC.ts"
+        "frontend/src/pages/MatchingPage.tsx (truncated)",
+        "frontend-file-summaries.txt"
+      ]
+    },
+    {
+      "description": "Introduced specific public TURN server endpoints and embedded credentials (openrelay.metered.ca with username/credential).",
+      "reason": "REQ-1 requires TURN-only behavior (e.g., `iceTransportPolicy: 'relay'`) but does not specify adding or hardcoding particular third-party TURN providers/credentials.",
+      "evidence": [
+        "frontend/src/hooks/useWebRTC.ts (truncated)"
       ]
     }
   ],
-  "confidence": 0.68,
+  "confidence": 0.62,
   "changed_files": [
-    "backend/main.mo",
     "frontend-file-summaries.txt",
-    "frontend/src/hooks/useQueries.ts",
     "frontend/src/hooks/useWebRTC.ts",
     "frontend/src/pages/MatchingPage.tsx",
     "project_state.json"
